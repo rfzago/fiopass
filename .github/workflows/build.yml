@@ -1,0 +1,58 @@
+name: Build FioPass
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Build .app
+        run: |
+          python -m PyInstaller -y --windowed \
+            --name "FioPass" \
+            --add-data "Anexo I_PLANILHA PASSAGENS E DIÁRIAS 2026.xlsx:." \
+            fiopass_gui.py
+
+      - name: Compactar .app
+        run: zip -r dist/FioPass-macOS.zip dist/FioPass.app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FioPass-macOS
+          path: dist/FioPass-macOS.zip
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Build .exe
+        run: |
+          python -m PyInstaller -y --windowed `
+            --name "FioPass" `
+            --add-data "Anexo I_PLANILHA PASSAGENS E DIÁRIAS 2026.xlsx;." `
+            fiopass_gui.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FioPass-Windows
+          path: dist\FioPass\
