@@ -10,7 +10,7 @@ import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-from fiopass import run_generation
+from fiopass import run_generation, parse_input, get_col
 
 
 class FioPassApp(tk.Tk):
@@ -21,6 +21,8 @@ class FioPassApp(tk.Tk):
         self.resizable(False, False)
         self._output_dir = None
         self._queue = queue.Queue()
+        self._rows = []
+        self._row_vars = []
         self._build_ui()
         self._center()
         self._poll_queue()
@@ -44,12 +46,38 @@ class FioPassApp(tk.Tk):
         ttk.Entry(frm_in, textvariable=self._input_var, width=56).pack(side='left', expand=True, fill='x')
         ttk.Button(frm_in, text='Selecionar…', command=self._browse_input).pack(side='left', padx=(6, 0))
 
+        # Seleção de registros (oculto até carregar arquivo)
+        self._frm_sel = ttk.LabelFrame(self, text='Registros encontrados', padding=8)
+        hdr = ttk.Frame(self._frm_sel)
+        hdr.pack(fill='x', pady=(0, 4))
+        ttk.Button(hdr, text='Selecionar todos', command=self._select_all).pack(side='left')
+        ttk.Button(hdr, text='Desmarcar todos', command=self._deselect_all).pack(side='left', padx=(6, 0))
+        self._lbl_count = ttk.Label(hdr, text='')
+        self._lbl_count.pack(side='right')
+
+        self._chk_canvas = tk.Canvas(self._frm_sel, height=140, highlightthickness=0)
+        sb_chk = ttk.Scrollbar(self._frm_sel, orient='vertical', command=self._chk_canvas.yview)
+        self._chk_canvas.configure(yscrollcommand=sb_chk.set)
+        sb_chk.pack(side='right', fill='y')
+        self._chk_canvas.pack(fill='x', expand=True)
+
+        self._chk_inner = ttk.Frame(self._chk_canvas)
+        self._chk_win = self._chk_canvas.create_window((0, 0), window=self._chk_inner, anchor='nw')
+        self._chk_inner.bind(
+            '<Configure>',
+            lambda e: self._chk_canvas.configure(scrollregion=self._chk_canvas.bbox('all')),
+        )
+        self._chk_canvas.bind(
+            '<Configure>',
+            lambda e: self._chk_canvas.itemconfig(self._chk_win, width=e.width),
+        )
+
         # Pasta de saída
-        frm_out = ttk.LabelFrame(self, text='Pasta de saída', padding=8)
-        frm_out.pack(fill='x', pady=(0, 12))
+        self._frm_out = ttk.LabelFrame(self, text='Pasta de saída', padding=8)
+        self._frm_out.pack(fill='x', pady=(0, 12))
         self._output_var = tk.StringVar()
-        ttk.Entry(frm_out, textvariable=self._output_var, width=56).pack(side='left', expand=True, fill='x')
-        ttk.Button(frm_out, text='Selecionar…', command=self._browse_output).pack(side='left', padx=(6, 0))
+        ttk.Entry(self._frm_out, textvariable=self._output_var, width=56).pack(side='left', expand=True, fill='x')
+        ttk.Button(self._frm_out, text='Selecionar…', command=self._browse_output).pack(side='left', padx=(6, 0))
 
         # Botão gerar
         self._btn_generate = ttk.Button(self, text='Gerar Formulários', command=self._start)
@@ -77,11 +105,59 @@ class FioPassApp(tk.Tk):
         )
         if path:
             self._input_var.set(path)
+            self._load_rows(path)
+
+    def _load_rows(self, path):
+        try:
+            rows = parse_input(path)
+        except Exception as exc:
+            messagebox.showerror('Erro', f'Não foi possível ler o arquivo:\n{exc}')
+            return
+
+        self._rows = rows
+        self._row_vars = []
+
+        for w in self._chk_inner.winfo_children():
+            w.destroy()
+
+        for row in rows:
+            cpf = get_col(row, 8).strip('"').strip()
+            periodo = get_col(row, 3)
+            var = tk.BooleanVar(value=True)
+            self._row_vars.append(var)
+            ttk.Checkbutton(
+                self._chk_inner,
+                text=f'{cpf}   {periodo}',
+                variable=var,
+                command=self._update_count,
+            ).pack(anchor='w', padx=4, pady=1)
+
+        if rows:
+            self._frm_sel.pack(fill='x', pady=(0, 8), before=self._frm_out)
+        else:
+            self._frm_sel.pack_forget()
+
+        self._update_count()
 
     def _browse_output(self):
         path = filedialog.askdirectory(title='Selecionar pasta de saída')
         if path:
             self._output_var.set(path)
+
+    def _select_all(self):
+        for v in self._row_vars:
+            v.set(True)
+        self._update_count()
+
+    def _deselect_all(self):
+        for v in self._row_vars:
+            v.set(False)
+        self._update_count()
+
+    def _update_count(self):
+        selected = sum(v.get() for v in self._row_vars)
+        total = len(self._row_vars)
+        self._lbl_count.config(text=f'{selected}/{total} selecionados')
 
     def _start(self):
         input_file  = self._input_var.get().strip()
@@ -94,14 +170,24 @@ class FioPassApp(tk.Tk):
             messagebox.showwarning('Atenção', 'Selecione a pasta de saída.')
             return
 
+        selected_rows = [row for row, var in zip(self._rows, self._row_vars) if var.get()]
+        if self._row_vars and not selected_rows:
+            messagebox.showwarning('Atenção', 'Selecione ao menos um registro.')
+            return
+
         self._clear_log()
         self._btn_open.pack_forget()
         self._btn_generate.configure(state='disabled')
 
+        rows_arg = selected_rows if self._row_vars else None
+
         def worker():
             try:
-                out = run_generation(input_file, output_base,
-                                     progress_callback=lambda m: self._queue.put(('log', m)))
+                out = run_generation(
+                    input_file, output_base,
+                    progress_callback=lambda m: self._queue.put(('log', m)),
+                    selected_rows=rows_arg,
+                )
                 self._queue.put(('done', out))
             except Exception as exc:
                 self._queue.put(('error', str(exc)))

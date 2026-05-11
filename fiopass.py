@@ -121,17 +121,18 @@ def generate_form(row, output_dir):
     return output_path
 
 
-def run_generation(input_file, base_output_dir, progress_callback=None):
+def run_generation(input_file, base_output_dir, progress_callback=None, selected_rows=None):
     """
     Lê input_file e gera um xlsx por registro em base_output_dir/YYYYMMDD_HHMM/.
     progress_callback(msg) é chamado a cada evento de progresso.
+    selected_rows, se fornecido, é usado em vez de parse_input(input_file).
     Retorna o caminho da pasta de saída criada.
     """
     run_stamp = datetime.now().strftime('%Y%m%d_%H%M')
     output_dir = os.path.join(base_output_dir, run_stamp)
     os.makedirs(output_dir, exist_ok=True)
 
-    rows = parse_input(input_file)
+    rows = selected_rows if selected_rows is not None else parse_input(input_file)
 
     if progress_callback:
         progress_callback(f'{len(rows)} registro(s) encontrado(s) em {os.path.basename(input_file)}')
