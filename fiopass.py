@@ -80,41 +80,80 @@ def generate_form(row, output_dir):
     ws['C6'] = get_col(row, 4)            # Local
 
     servicos = [s.strip() for s in get_col(row, 5).split(',')]
-    ws['C7'] = 'Passagens :  (X)' if 'Passagens'      in servicos else 'Passagens :  ( )'
-    ws['D7'] = 'Diárias: (X)'     if 'Diárias'        in servicos else 'Diárias: ( )'
-    ws['E7'] = 'Terrestre: (X)'   if 'Terrestre'       in servicos else 'Terrestre: ( )'
+    ws['C7'] = 'Passagens :  (X)' if 'Passagens Aéreas'    in servicos else 'Passagens :  ( )'
+    ws['D7'] = 'Diárias: (X)'     if 'Diárias'             in servicos else 'Diárias: ( )'
+    ws['E7'] = 'Terrestre: (X)'   if 'Passagens Terrestres' in servicos else 'Terrestre: ( )'
     ws['F7'] = 'Aluguel de carro: (X)' if 'Aluguel de carro' in servicos else 'Aluguel de carro: ( )'
 
     ws['B15'] = get_col(row, 6)             # Nome completo
     ws['C15'] = format_date(get_col(row, 7)) # Data de nascimento
     ws['D15'] = get_col(row, 9)             # Cargo/Função
     ws['E15'] = get_col(row, 8)             # CPF
-    ws['F15'] = get_col(row, 10)            # Nome banco
-    ws['G15'] = get_col(row, 11)            # Agência
-    ws['H15'] = get_col(row, 12)            # DV agência
-    ws['I15'] = get_col(row, 13)            # Conta corrente
-    ws['J15'] = get_col(row, 14)            # DV conta
-    ws['K15'] = get_col(row, 15)            # Poupança
+    ws['F15'] = get_col(row, 11)            # Nome banco
+    ws['G15'] = get_col(row, 12)            # Agência
+    ws['H15'] = get_col(row, 13)            # DV agência
+    ws['I15'] = get_col(row, 14)            # Conta corrente
+    ws['J15'] = get_col(row, 15)            # DV conta
+    ws['K15'] = get_col(row, 16)            # Poupança
 
-    # Trechos: cada segmento ocupa 9 colunas a partir de S(18), AB(27), AK(36), AT(45)
-    # Offsets dentro do segmento: origem=0, destino=1, data_ida=3, hora_ida=4, data_volta=6, hora_volta=7
-    SEGMENT_STARTS = [18, 27, 36, 45]
-    SEGMENT_ROWS   = [15, 16, 17, 18]
-    SEGMENT_FIELDS = [
-        ('L', 0, False),
-        ('M', 1, False),
-        ('N', 3, True),
-        ('O', 4, False),
-        ('P', 6, True),
-        ('Q', 7, False),
-    ]
-    for start_col, out_row in zip(SEGMENT_STARTS, SEGMENT_ROWS):
-        for out_col, offset, is_date in SEGMENT_FIELDS:
-            value = get_col(row, start_col + offset)
-            ws[f'{out_col}{out_row}'] = format_date(value) if is_date else value
+    # Trechos: cada slot ocupa 8 colunas a partir de 19, na ordem: Tipo de Trecho
+    # (Ida/Volta), Origem, Destino, Tipo Localidade de Destino, Data, Período,
+    # Tipo Deslocamento, Observações sobre o deslocamento. Até 10 slots
+    # reservados; para de ler no primeiro slot sem origem preenchida.
+    TRECHO_START = 19
+    TRECHO_WIDTH = 8
+    MAX_TRECHOS  = 10
+    OFFSET_ORIGEM, OFFSET_DESTINO, OFFSET_DATA, OFFSET_TURNO, OFFSET_TIPO_DESLOCAMENTO = 1, 2, 4, 5, 6
 
-    ws['C19'] = get_col(row, 108)   # Justificativa fora do prazo
-    ws['C20'] = get_col(row, 109)   # Observações
+    trechos = []
+    for i in range(MAX_TRECHOS):
+        base = TRECHO_START + i * TRECHO_WIDTH
+        origem = get_col(row, base + OFFSET_ORIGEM)
+        if not origem:
+            break
+        trechos.append({
+            'origem':           origem,
+            'destino':          get_col(row, base + OFFSET_DESTINO),
+            'data':             get_col(row, base + OFFSET_DATA),
+            'turno':            get_col(row, base + OFFSET_TURNO),
+            'tipo_deslocamento': get_col(row, base + OFFSET_TIPO_DESLOCAMENTO),
+        })
+
+    def origem_com_tipo(t):
+        return f"{t['origem']}\n{t['tipo_deslocamento']}" if t['tipo_deslocamento'] else t['origem']
+
+    # Pareia trechos consecutivos em viagens de ida-e-volta, na ordem em que
+    # aparecem (independente da direção declarada): o trecho i fornece
+    # origem/destino/data de ida da linha, e o trecho i+1 fornece a data de
+    # volta. Um único trecho gera uma linha só de ida.
+    output_rows = []
+    if len(trechos) == 1:
+        t = trechos[0]
+        output_rows.append({
+            'origem': origem_com_tipo(t), 'destino': t['destino'],
+            'data_ida': t['data'], 'hora_ida': t['turno'],
+            'data_volta': '', 'hora_volta': '',
+        })
+    else:
+        for i in range(len(trechos) - 1):
+            t, t_next = trechos[i], trechos[i + 1]
+            output_rows.append({
+                'origem': origem_com_tipo(t), 'destino': t['destino'],
+                'data_ida': t['data'], 'hora_ida': t['turno'],
+                'data_volta': t_next['data'], 'hora_volta': t_next['turno'],
+            })
+
+    SEGMENT_ROWS = [15, 16, 17, 18]
+    for out_row, seg in zip(SEGMENT_ROWS, output_rows):
+        ws[f'L{out_row}'] = seg['origem']
+        ws[f'M{out_row}'] = seg['destino']
+        ws[f'N{out_row}'] = format_date(seg['data_ida'])
+        ws[f'O{out_row}'] = seg['hora_ida']
+        ws[f'P{out_row}'] = format_date(seg['data_volta'])
+        ws[f'Q{out_row}'] = seg['hora_volta']
+
+    ws['C19'] = get_col(row, 99)    # Justificativa fora do prazo
+    ws['C20'] = get_col(row, 100)   # Observações
 
     output_path = os.path.join(output_dir, f'{cpf}.xlsx')
     wb.save(output_path)
