@@ -12,6 +12,36 @@ from datetime import datetime
 import openpyxl
 
 TEMPLATE_FILENAME = 'Anexo I_PLANILHA PASSAGENS E DIÁRIAS 2026.xlsx'
+VERSION_FILENAME = 'VERSION'
+
+# Colunas esperadas no arquivo de entrada, na ordem, conforme
+# formulario_345_2026-07-15_162647.xls. Usado para detectar arquivos gerados
+# por uma versão desatualizada do formulário antes de tentar interpretá-los.
+EXPECTED_HEADER = [
+    'CPF', 'Desc. Pub.', 'Nome do Evento', 'Período', 'Local', 'Providenciar',
+    'Nome Completo', 'Data de Nascimento', 'CPF', 'Cargo/Função',
+    'Documento de Identificação', 'Nome do Banco', 'Agência', 'Dv. Agência',
+    'Conta Corrente', 'Dv. Conta Corrente', 'Poupança',
+    'Comprovante de Conta Bancária', 'Informe a logística da viagem',
+] + [
+    label
+    for _ in range(10)
+    for label in (
+        'Tipo de Trecho', 'Origem', 'Destino', 'Tipo Localidade de Destino',
+        'Data', 'Período', 'Tipo Deslocamento', 'Observações sobre o deslocamento',
+    )
+] + [
+    'Justificativa de Solicitação fora do prazo de 15 dias úteis',
+    'Observações', 'Declaração de Compromisso',
+]
+# O 6º slot de trecho (colunas 59-60) vem com Origem/Tipo de Trecho invertidos
+# no arquivo de referência — mantido igual ao original para não gerar falso
+# negativo na validação.
+EXPECTED_HEADER[59], EXPECTED_HEADER[60] = EXPECTED_HEADER[60], EXPECTED_HEADER[59]
+
+
+class InputFormatError(Exception):
+    """Levantado quando o arquivo de entrada não tem as colunas esperadas."""
 
 
 def get_resource_path(filename):
@@ -19,6 +49,15 @@ def get_resource_path(filename):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, filename)
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
+
+
+def get_version():
+    """Lê a versão (data da última atualização do parsing) do arquivo VERSION."""
+    try:
+        with open(get_resource_path(VERSION_FILENAME), encoding='utf-8') as f:
+            return f.read().strip()
+    except OSError:
+        return '?'
 
 
 class TableParser(HTMLParser):
@@ -50,9 +89,51 @@ class TableParser(HTMLParser):
             self._current_cell += data
 
 
+class _CellCollector(HTMLParser):
+    """Coleta o texto de todas as células <td>/<th>, sem levar em conta <tr>.
+
+    Usado para ler os rótulos das colunas: no arquivo exportado eles ficam
+    soltos logo após a abertura de <table>, sem um <tr> envolvendo-os.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.cells = []
+        self._current_cell = ''
+        self._in_cell = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ('td', 'th'):
+            self._in_cell = True
+            self._current_cell = ''
+
+    def handle_endtag(self, tag):
+        if tag in ('td', 'th'):
+            self.cells.append(self._current_cell.strip())
+            self._in_cell = False
+
+    def handle_data(self, data):
+        if self._in_cell:
+            self._current_cell += data
+
+
+def parse_header(content):
+    first_tr = content.lower().find('<tr')
+    header_html = content if first_tr == -1 else content[:first_tr]
+    parser = _CellCollector()
+    parser.feed(header_html)
+    return parser.cells
+
+
 def parse_input(filepath):
     with open(filepath, encoding='utf-8') as f:
         content = f.read()
+
+    if parse_header(content) != EXPECTED_HEADER:
+        raise InputFormatError(
+            'Arquivo de entrada desatualizado. Favor gerar uma nova extração para corrigir.'
+        )
+
     parser = TableParser()
     parser.feed(content)
     return parser.rows
@@ -186,6 +267,8 @@ def run_generation(input_file, base_output_dir, progress_callback=None, selected
 
 
 def main():
+    print(f'Versão {get_version()}')
+
     if len(sys.argv) < 2:
         print(f'Uso: python {os.path.basename(sys.argv[0])} <arquivo_entrada.xls>')
         sys.exit(1)
@@ -202,7 +285,11 @@ def main():
         sys.exit(1)
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    run_generation(input_file, script_dir, progress_callback=print)
+    try:
+        run_generation(input_file, script_dir, progress_callback=print)
+    except InputFormatError as exc:
+        print(f'Erro: {exc}')
+        sys.exit(1)
     print('Concluído.')
 
 

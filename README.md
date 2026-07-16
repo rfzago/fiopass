@@ -37,6 +37,7 @@ Os arquivos gerados são salvos em `YYYYMMDD_HHMM/` na mesma pasta do script.
 python3 -m PyInstaller -y --windowed \
   --name "FioPass" \
   --add-data "Anexo I_PLANILHA PASSAGENS E DIÁRIAS 2026.xlsx:." \
+  --add-data "VERSION:." \
   fiopass_gui.py
 ```
 O `.app` fica em `dist/FioPass.app`. Para distribuir, comprima a pasta `dist/FioPass.app` e envie — o destinatário arrasta para Aplicativos.
@@ -49,6 +50,7 @@ No Windows, execute o comando abaixo no Prompt de Comando ou PowerShell:
 python -m PyInstaller -y --windowed ^
   --name "FioPass" ^
   --add-data "Anexo I_PLANILHA PASSAGENS E DIÁRIAS 2026.xlsx;." ^
+  --add-data "VERSION;." ^
   fiopass_gui.py
 ```
 O `.exe` fica em `dist\FioPass\FioPass.exe`. No Windows o separador do `--add-data` é `;` em vez de `:`.

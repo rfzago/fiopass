@@ -10,7 +10,7 @@ import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-from fiopass import run_generation, parse_input, get_col
+from fiopass import run_generation, parse_input, get_col, get_version, InputFormatError
 
 
 class FioPassApp(tk.Tk):
@@ -38,6 +38,10 @@ class FioPassApp(tk.Tk):
 
     def _build_ui(self):
         self.configure(padx=16, pady=12)
+
+        ttk.Label(
+            self, text=f'Versão {get_version()}', font=('TkDefaultFont', 8),
+        ).place(relx=1.0, x=-4, y=2, anchor='ne')
 
         # Arquivo de entrada
         frm_in = ttk.LabelFrame(self, text='Arquivo de entrada', padding=8)
@@ -110,6 +114,9 @@ class FioPassApp(tk.Tk):
     def _load_rows(self, path):
         try:
             rows = parse_input(path)
+        except InputFormatError as exc:
+            messagebox.showerror('Erro', str(exc))
+            return
         except Exception as exc:
             messagebox.showerror('Erro', f'Não foi possível ler o arquivo:\n{exc}')
             return
