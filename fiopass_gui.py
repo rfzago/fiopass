@@ -39,9 +39,11 @@ class FioPassApp(tk.Tk):
     def _build_ui(self):
         self.configure(padx=16, pady=12)
 
+        frm_version = ttk.Frame(self)
+        frm_version.pack(fill='x')
         ttk.Label(
-            self, text=f'Versão {get_version()}', font=('TkDefaultFont', 8),
-        ).place(relx=1.0, x=-4, y=2, anchor='ne')
+            frm_version, text=f'Versão {get_version()}', font=('TkDefaultFont', 8),
+        ).pack(side='right')
 
         # Arquivo de entrada
         frm_in = ttk.LabelFrame(self, text='Arquivo de entrada', padding=8)

@@ -33,6 +33,7 @@ Os arquivos gerados são salvos em `YYYYMMDD_HHMM/` na mesma pasta do script.
 ## Distribuição
 
 ### macOS — gerar `.app`
+Rode `./build_mac.sh` (roda o comando abaixo já com as flags certas — evita esquecer alguma).
 ```bash
 python3 -m PyInstaller -y --windowed \
   --name "FioPass" \
@@ -42,10 +43,12 @@ python3 -m PyInstaller -y --windowed \
 ```
 O `.app` fica em `dist/FioPass.app`. Para distribuir, comprima a pasta `dist/FioPass.app` e envie — o destinatário arrasta para Aplicativos.
 
+> **Atenção:** se faltar a flag `--add-data "VERSION:."`, o app compila normalmente mas mostra "Versão ?" — por isso o script `build_mac.sh` existe, para não depender de digitar o comando manualmente.
+
 > **Importante:** use sempre `python3 -m PyInstaller` em vez do comando `pyinstaller` diretamente. Isso garante que o build usa o mesmo Python do ambiente onde o projeto roda, evitando erros de módulos não encontrados (como `_tkinter`).
 
 ### Windows — gerar `.exe`
-No Windows, execute o comando abaixo no Prompt de Comando ou PowerShell:
+Rode `build_windows.bat` (roda o comando abaixo já com as flags certas), ou execute o comando manualmente no Prompt de Comando ou PowerShell:
 ```bash
 python -m PyInstaller -y --windowed ^
   --name "FioPass" ^

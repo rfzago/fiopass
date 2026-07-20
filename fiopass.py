@@ -7,6 +7,7 @@ Uso: python fiopass.py <arquivo_entrada.xls>
 
 import sys
 import os
+from copy import copy
 from html.parser import HTMLParser
 from datetime import datetime
 import openpyxl
@@ -15,14 +16,15 @@ TEMPLATE_FILENAME = 'Anexo I_PLANILHA PASSAGENS E DIÁRIAS 2026.xlsx'
 VERSION_FILENAME = 'VERSION'
 
 # Colunas esperadas no arquivo de entrada, na ordem, conforme
-# formulario_345_2026-07-15_162647.xls. Usado para detectar arquivos gerados
+# formulario_345_2026-07-20_174436.xls. Usado para detectar arquivos gerados
 # por uma versão desatualizada do formulário antes de tentar interpretá-los.
 EXPECTED_HEADER = [
-    'CPF', 'Desc. Pub.', 'Nome do Evento', 'Período', 'Local', 'Providenciar',
-    'Nome Completo', 'Data de Nascimento', 'CPF', 'Cargo/Função',
-    'Documento de Identificação', 'Nome do Banco', 'Agência', 'Dv. Agência',
-    'Conta Corrente', 'Dv. Conta Corrente', 'Poupança',
-    'Comprovante de Conta Bancária', 'Informe a logística da viagem',
+    'CPF', 'Desc. Pub.', 'Informe o nome da atividade de avaliação',
+    'Período do deslocamento', 'Local da atividade de avaliação',
+    'Itens solicitados', 'Nome Completo', 'Data de Nascimento', 'CPF',
+    'Cargo/Função', 'Documento de Identificação', 'Banco', 'Agência',
+    'Dígito da agência', 'Conta Corrente', 'Dígito da conta', 'Poupança',
+    'Comprovante bancário', 'Tipo de logística necessária',
 ] + [
     label
     for _ in range(10)
@@ -31,7 +33,7 @@ EXPECTED_HEADER = [
         'Data', 'Período', 'Tipo Deslocamento', 'Observações sobre o deslocamento',
     )
 ] + [
-    'Justificativa de Solicitação fora do prazo de 15 dias úteis',
+    'Justificativa para solicitação fora do prazo',
     'Observações', 'Declaração de Compromisso',
 ]
 # O 6º slot de trecho (colunas 59-60) vem com Origem/Tipo de Trecho invertidos
@@ -150,6 +152,45 @@ def format_date(value):
         return value
 
 
+def insert_extra_segment_rows(ws, insert_at, amount):
+    """Insere `amount` linhas extras em `insert_at` para acomodar mais de 4
+    trechos, replicando a formatação da última linha de trecho do template
+    (a linha logo acima do ponto de inserção) e corrigindo o que
+    ws.insert_rows não ajusta sozinho: altura das linhas e mesclagens de
+    células abaixo do ponto de inserção.
+    """
+    old_max_row = ws.max_row
+    model_row = insert_at - 1
+
+    # Precisa desfazer as mesclagens ANTES do insert_rows: o openpyxl desloca
+    # as células físicas junto com o conteúdo, mas não atualiza os limites
+    # guardados em merged_cells.ranges, então desfazer depois do insert_rows
+    # tenta remover células de mesclagem que já não estão mais onde o
+    # metadado (não deslocado) diz que deveriam estar.
+    shifted_merges = []
+    for merged_range in list(ws.merged_cells.ranges):
+        if merged_range.min_row >= insert_at:
+            shifted_merges.append((
+                merged_range.min_row + amount, merged_range.min_col,
+                merged_range.max_row + amount, merged_range.max_col,
+            ))
+            ws.unmerge_cells(str(merged_range))
+
+    ws.insert_rows(insert_at, amount)
+
+    for r in range(old_max_row, insert_at - 1, -1):
+        ws.row_dimensions[r + amount].height = ws.row_dimensions[r].height
+
+    for min_row, min_col, max_row, max_col in shifted_merges:
+        ws.merge_cells(start_row=min_row, start_column=min_col, end_row=max_row, end_column=max_col)
+
+    for i in range(amount):
+        new_row = insert_at + i
+        for col in range(1, ws.max_column + 1):
+            ws.cell(row=new_row, column=col)._style = copy(ws.cell(row=model_row, column=col)._style)
+        ws.row_dimensions[new_row].height = ws.row_dimensions[model_row].height
+
+
 def generate_form(row, output_dir):
     cpf = get_col(row, 0).strip('"').strip()
 
@@ -178,21 +219,34 @@ def generate_form(row, output_dir):
     ws['K15'] = get_col(row, 16)            # Poupança
 
     # Trechos: cada slot ocupa 8 colunas a partir de 19, na ordem: Tipo de Trecho
-    # (Ida/Volta), Origem, Destino, Tipo Localidade de Destino, Data, Período,
-    # Tipo Deslocamento, Observações sobre o deslocamento. Até 10 slots
-    # reservados; para de ler no primeiro slot sem origem preenchida.
+    # (Ida/Intermediário/Volta), Origem, Destino, Tipo Localidade de Destino,
+    # Data, Período, Tipo Deslocamento, Observações sobre o deslocamento. Até
+    # 10 slots reservados; para de ler no primeiro slot sem origem preenchida.
+    #
+    # Em algumas respostas (ex.: o 6º slot sempre, e eventualmente outros),
+    # Tipo de Trecho e Origem vêm fisicamente trocados de posição — resquício
+    # de reordenação de perguntas no Google Forms ao longo do tempo. Por isso
+    # os dois primeiros campos são identificados pelo conteúdo (valor de
+    # direção conhecido) em vez de por posição fixa.
     TRECHO_START = 19
     TRECHO_WIDTH = 8
     MAX_TRECHOS  = 10
-    OFFSET_ORIGEM, OFFSET_DESTINO, OFFSET_DATA, OFFSET_TURNO, OFFSET_TIPO_DESLOCAMENTO = 1, 2, 4, 5, 6
+    OFFSET_DESTINO, OFFSET_DATA, OFFSET_TURNO, OFFSET_TIPO_DESLOCAMENTO = 2, 4, 5, 6
+    DIRECOES_VALIDAS = ('Ida', 'Intermediário', 'Volta')
 
     trechos = []
     for i in range(MAX_TRECHOS):
         base = TRECHO_START + i * TRECHO_WIDTH
-        origem = get_col(row, base + OFFSET_ORIGEM)
+        campo0 = get_col(row, base)
+        campo1 = get_col(row, base + 1)
+        if campo1 in DIRECOES_VALIDAS:
+            direcao, origem = campo1, campo0
+        else:
+            direcao, origem = campo0, campo1
         if not origem:
             break
         trechos.append({
+            'direcao':          direcao,
             'origem':           origem,
             'destino':          get_col(row, base + OFFSET_DESTINO),
             'data':             get_col(row, base + OFFSET_DATA),
@@ -200,31 +254,33 @@ def generate_form(row, output_dir):
             'tipo_deslocamento': get_col(row, base + OFFSET_TIPO_DESLOCAMENTO),
         })
 
-    def origem_com_tipo(t):
-        return f"{t['origem']}\n{t['tipo_deslocamento']}" if t['tipo_deslocamento'] else t['origem']
-
-    # Pareia trechos consecutivos em viagens de ida-e-volta, na ordem em que
-    # aparecem (independente da direção declarada): o trecho i fornece
-    # origem/destino/data de ida da linha, e o trecho i+1 fornece a data de
-    # volta. Um único trecho gera uma linha só de ida.
+    # Cada trecho vira sua própria linha: "Ida"/"Intermediário" preenchem
+    # Data/Horário de ida (Data Volta/Horário de volta ficam em branco);
+    # "Volta" preenche Data/Horário de volta (Data Ida/Horário de ida ficam
+    # em branco). O Horário sempre combina Período + Tipo Deslocamento.
     output_rows = []
-    if len(trechos) == 1:
-        t = trechos[0]
-        output_rows.append({
-            'origem': origem_com_tipo(t), 'destino': t['destino'],
-            'data_ida': t['data'], 'hora_ida': t['turno'],
-            'data_volta': '', 'hora_volta': '',
-        })
-    else:
-        for i in range(len(trechos) - 1):
-            t, t_next = trechos[i], trechos[i + 1]
+    for t in trechos:
+        horario = f"{t['turno']} - {t['tipo_deslocamento']}"
+        if t['direcao'] == 'Volta':
             output_rows.append({
-                'origem': origem_com_tipo(t), 'destino': t['destino'],
-                'data_ida': t['data'], 'hora_ida': t['turno'],
-                'data_volta': t_next['data'], 'hora_volta': t_next['turno'],
+                'origem': t['origem'], 'destino': t['destino'],
+                'data_ida': '', 'hora_ida': '',
+                'data_volta': t['data'], 'hora_volta': horario,
+            })
+        else:  # 'Ida' ou 'Intermediário'
+            output_rows.append({
+                'origem': t['origem'], 'destino': t['destino'],
+                'data_ida': t['data'], 'hora_ida': horario,
+                'data_volta': '', 'hora_volta': '',
             })
 
     SEGMENT_ROWS = [15, 16, 17, 18]
+    extra_needed = len(output_rows) - len(SEGMENT_ROWS)
+    if extra_needed > 0:
+        insert_at = SEGMENT_ROWS[-1] + 1
+        insert_extra_segment_rows(ws, insert_at, extra_needed)
+        SEGMENT_ROWS = SEGMENT_ROWS + list(range(insert_at, insert_at + extra_needed))
+
     for out_row, seg in zip(SEGMENT_ROWS, output_rows):
         ws[f'L{out_row}'] = seg['origem']
         ws[f'M{out_row}'] = seg['destino']
@@ -233,8 +289,9 @@ def generate_form(row, output_dir):
         ws[f'P{out_row}'] = format_date(seg['data_volta'])
         ws[f'Q{out_row}'] = seg['hora_volta']
 
-    ws['C19'] = get_col(row, 99)    # Justificativa fora do prazo
-    ws['C20'] = get_col(row, 100)   # Observações
+    justificativa_row = 19 + max(extra_needed, 0)
+    ws[f'C{justificativa_row}'] = get_col(row, 99)      # Justificativa fora do prazo
+    ws[f'C{justificativa_row + 1}'] = get_col(row, 100) # Observações
 
     output_path = os.path.join(output_dir, f'{cpf}.xlsx')
     wb.save(output_path)
