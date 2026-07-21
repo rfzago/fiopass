@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 
 python3 -m PyInstaller -y --windowed \
   --name "FioPass" \
-  --add-data "Anexo I_PLANILHA PASSAGENS E DIÁRIAS 2026.xlsx:." \
+  --add-data "template_fiotec.xlsx:." \
   --add-data "VERSION:." \
   fiopass_gui.py
 

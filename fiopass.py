@@ -12,7 +12,7 @@ from html.parser import HTMLParser
 from datetime import datetime
 import openpyxl
 
-TEMPLATE_FILENAME = 'Anexo I_PLANILHA PASSAGENS E DIÁRIAS 2026.xlsx'
+TEMPLATE_FILENAME = 'template_fiotec.xlsx'
 VERSION_FILENAME = 'VERSION'
 
 # Colunas esperadas no arquivo de entrada, na ordem, conforme
@@ -150,6 +150,17 @@ def format_date(value):
         return datetime.strptime(value, '%Y-%m-%d').strftime('%d/%m/%Y')
     except ValueError:
         return value
+
+
+def unique_output_path(output_dir, cpf):
+    """Evita sobrescrever quando há mais de um formulário para o mesmo CPF:
+    {cpf}.xlsx, depois {cpf}-2.xlsx, {cpf}-3.xlsx, etc."""
+    path = os.path.join(output_dir, f'{cpf}.xlsx')
+    i = 2
+    while os.path.exists(path):
+        path = os.path.join(output_dir, f'{cpf}-{i}.xlsx')
+        i += 1
+    return path
 
 
 def insert_extra_segment_rows(ws, insert_at, amount):
@@ -293,7 +304,7 @@ def generate_form(row, output_dir):
     ws[f'C{justificativa_row}'] = get_col(row, 99)      # Justificativa fora do prazo
     ws[f'C{justificativa_row + 1}'] = get_col(row, 100) # Observações
 
-    output_path = os.path.join(output_dir, f'{cpf}.xlsx')
+    output_path = unique_output_path(output_dir, cpf)
     wb.save(output_path)
     return output_path
 

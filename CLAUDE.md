@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `fiopass` is a Python tool (likely a Flask web app) that generates FIOTEC travel request forms — the official "Solicitação de Passagens e Diárias" spreadsheet used by Fiocruz/FIOTEC projects.
 
-**Core workflow:** users upload an input file in the format of `formulario_345_2026-05-08_170531.xls` (which may contain multiple beneficiaries). The program reads each beneficiary record and produces **one output `.xlsx` file per record**, filled out according to the layout of `Anexo I_PLANILHA PASSAGENS E DIÁRIAS 2026.xlsx`.
+**Core workflow:** users upload an input file in the format of `formulario_345_2026-05-08_170531.xls` (which may contain multiple beneficiaries). The program reads each beneficiary record and produces **one output `.xlsx` file per record**, filled out according to the layout of `template_fiotec.xlsx`.
 
 ## Input Format
 
@@ -14,7 +14,7 @@ Input files (e.g. `formulario_345_2026-05-08_170531.xls`) are **HTML documents s
 
 ## Output Format
 
-One `.xlsx` file is generated per beneficiary, following the layout of `Anexo I_PLANILHA PASSAGENS E DIÁRIAS 2026.xlsx`.
+One `.xlsx` file is generated per beneficiary, following the layout of `template_fiotec.xlsx`.
 
 ## Data Model
 
@@ -37,5 +37,5 @@ Each generated form can include **multiple beneficiaries**, each with:
 
 ## Reference Files
 
-- `Anexo I_PLANILHA PASSAGENS E DIÁRIAS 2026.xlsx` — official FIOTEC output template. Contains the exact layout, column headers, and boilerplate text that each generated file must match.
+- `template_fiotec.xlsx` — official FIOTEC output template. Contains the exact layout, column headers, and boilerplate text that each generated file must match.
 - `formulario_345_2026-05-08_170531.xls` — sample input file. Use it to understand the input structure and as a test fixture when parsing uploaded files.

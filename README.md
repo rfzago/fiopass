@@ -37,7 +37,7 @@ Rode `./build_mac.sh` (roda o comando abaixo já com as flags certas — evita e
 ```bash
 python3 -m PyInstaller -y --windowed \
   --name "FioPass" \
-  --add-data "Anexo I_PLANILHA PASSAGENS E DIÁRIAS 2026.xlsx:." \
+  --add-data "template_fiotec.xlsx:." \
   --add-data "VERSION:." \
   fiopass_gui.py
 ```
@@ -52,7 +52,7 @@ Rode `build_windows.bat` (roda o comando abaixo já com as flags certas), ou exe
 ```bash
 python -m PyInstaller -y --windowed ^
   --name "FioPass" ^
-  --add-data "Anexo I_PLANILHA PASSAGENS E DIÁRIAS 2026.xlsx;." ^
+  --add-data "template_fiotec.xlsx;." ^
   --add-data "VERSION;." ^
   fiopass_gui.py
 ```
