@@ -16,7 +16,7 @@ TEMPLATE_FILENAME = 'template_fiotec.xlsx'
 VERSION_FILENAME = 'VERSION'
 
 # Colunas esperadas no arquivo de entrada, na ordem, conforme
-# formulario_345_2026-07-20_174436.xls. Usado para detectar arquivos gerados
+# formulario_345_2026-07-22_091303.xls. Usado para detectar arquivos gerados
 # por uma versão desatualizada do formulário antes de tentar interpretá-los.
 EXPECTED_HEADER = [
     'CPF', 'Desc. Pub.', 'Informe o nome da atividade de avaliação',
@@ -36,10 +36,6 @@ EXPECTED_HEADER = [
     'Justificativa para solicitação fora do prazo',
     'Observações', 'Declaração de Compromisso',
 ]
-# O 6º slot de trecho (colunas 59-60) vem com Origem/Tipo de Trecho invertidos
-# no arquivo de referência — mantido igual ao original para não gerar falso
-# negativo na validação.
-EXPECTED_HEADER[59], EXPECTED_HEADER[60] = EXPECTED_HEADER[60], EXPECTED_HEADER[59]
 
 
 class InputFormatError(Exception):
@@ -213,10 +209,10 @@ def generate_form(row, output_dir):
     ws['C6'] = get_col(row, 4)            # Local
 
     servicos = [s.strip() for s in get_col(row, 5).split(',')]
-    ws['C7'] = 'Passagens :  (X)' if 'Passagens Aéreas'    in servicos else 'Passagens :  ( )'
-    ws['D7'] = 'Diárias: (X)'     if 'Diárias'             in servicos else 'Diárias: ( )'
-    ws['E7'] = 'Terrestre: (X)'   if 'Passagens Terrestres' in servicos else 'Terrestre: ( )'
-    ws['F7'] = 'Aluguel de carro: (X)' if 'Aluguel de carro' in servicos else 'Aluguel de carro: ( )'
+    ws['C7'] = 'Passagens :  (X)' if 'Passagem aérea'       in servicos else 'Passagens :  ( )'
+    ws['D7'] = 'Diárias: (X)'     if 'Diárias'              in servicos else 'Diárias: ( )'
+    ws['E7'] = 'Terrestre: (X)'   if 'Transporte terrestre' in servicos else 'Terrestre: ( )'
+    ws['F7'] = 'Aluguel de carro: (X)' if 'Aluguel de veículo' in servicos else 'Aluguel de carro: ( )'
 
     ws['B15'] = get_col(row, 6)             # Nome completo
     ws['C15'] = format_date(get_col(row, 7)) # Data de nascimento
