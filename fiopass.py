@@ -16,13 +16,13 @@ TEMPLATE_FILENAME = 'template_fiotec.xlsx'
 VERSION_FILENAME = 'VERSION'
 
 # Colunas esperadas no arquivo de entrada, na ordem, conforme
-# formulario_345_2026-07-22_091303.xls. Usado para detectar arquivos gerados
+# formulario_320_2026-07-23_112029.xls. Usado para detectar arquivos gerados
 # por uma versão desatualizada do formulário antes de tentar interpretá-los.
 EXPECTED_HEADER = [
     'CPF', 'Desc. Pub.', 'Informe o nome da atividade de avaliação',
     'Período do deslocamento', 'Local da atividade de avaliação',
     'Itens solicitados', 'Nome Completo', 'Data de Nascimento', 'CPF',
-    'Cargo/Função', 'Documento de Identificação', 'Banco', 'Agência',
+    'Cargo/Função', 'Documento de Identificação', 'Nome do Banco', 'Agência',
     'Dígito da agência', 'Conta Corrente', 'Dígito da conta', 'Poupança',
     'Comprovante bancário', 'Tipo de logística necessária',
 ] + [
