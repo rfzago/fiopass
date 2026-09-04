@@ -130,8 +130,8 @@ class FioPassApp(tk.Tk):
             w.destroy()
 
         for row in rows:
-            cpf = get_col(row, 8).strip('"').strip()
-            periodo = get_col(row, 3)
+            cpf = get_col(row, 10).strip('"').strip()
+            periodo = get_col(row, 5)
             var = tk.BooleanVar(value=True)
             self._row_vars.append(var)
             ttk.Checkbutton(

@@ -16,10 +16,10 @@ TEMPLATE_FILENAME = 'template_fiotec.xlsx'
 VERSION_FILENAME = 'VERSION'
 
 # Colunas esperadas no arquivo de entrada, na ordem, conforme
-# formulario_320_2026-07-23_112029.xls. Usado para detectar arquivos gerados
+# formulario_320_2026-09-04_085719.xls. Usado para detectar arquivos gerados
 # por uma versão desatualizada do formulário antes de tentar interpretá-los.
 EXPECTED_HEADER = [
-    'CPF', 'Desc. Pub.', 'Informe o nome da atividade de avaliação',
+    'CPF', 'Chave', 'Dt. Envio', 'Desc. Pub.', 'Informe o nome da atividade de avaliação',
     'Período do deslocamento', 'Local da atividade de avaliação',
     'Itens solicitados', 'Nome Completo', 'Data de Nascimento', 'CPF',
     'Cargo/Função', 'Documento de Identificação', 'Nome do Banco', 'Agência',
@@ -199,33 +199,33 @@ def insert_extra_segment_rows(ws, insert_at, amount):
 
 
 def generate_form(row, output_dir):
-    cpf = get_col(row, 0).strip('"').strip()
+    cpf = get_col(row, 0).strip('="').strip()
 
     wb = openpyxl.load_workbook(get_resource_path(TEMPLATE_FILENAME))
     ws = wb.active
 
-    ws['C4'] = get_col(row, 2)            # Identificação do evento
-    ws['C5'] = get_col(row, 3)            # Data
-    ws['C6'] = get_col(row, 4)            # Local
+    ws['C4'] = get_col(row, 4)            # Identificação do evento
+    ws['C5'] = get_col(row, 5)            # Data
+    ws['C6'] = get_col(row, 6)            # Local
 
-    servicos = [s.strip() for s in get_col(row, 5).split(',')]
+    servicos = [s.strip() for s in get_col(row, 7).split(',')]
     ws['C7'] = 'Passagens :  (X)' if 'Passagem aérea'       in servicos else 'Passagens :  ( )'
     ws['D7'] = 'Diárias: (X)'     if 'Diárias'              in servicos else 'Diárias: ( )'
     ws['E7'] = 'Terrestre: (X)'   if 'Transporte terrestre' in servicos else 'Terrestre: ( )'
     ws['F7'] = 'Aluguel de carro: (X)' if 'Aluguel de veículo' in servicos else 'Aluguel de carro: ( )'
 
-    ws['B15'] = get_col(row, 6)             # Nome completo
-    ws['C15'] = format_date(get_col(row, 7)) # Data de nascimento
-    ws['D15'] = get_col(row, 9)             # Cargo/Função
-    ws['E15'] = get_col(row, 8)             # CPF
-    ws['F15'] = get_col(row, 11)            # Nome banco
-    ws['G15'] = get_col(row, 12)            # Agência
-    ws['H15'] = get_col(row, 13)            # DV agência
-    ws['I15'] = get_col(row, 14)            # Conta corrente
-    ws['J15'] = get_col(row, 15)            # DV conta
-    ws['K15'] = get_col(row, 16)            # Poupança
+    ws['B15'] = get_col(row, 8)             # Nome completo
+    ws['C15'] = format_date(get_col(row, 9)) # Data de nascimento
+    ws['D15'] = get_col(row, 11)            # Cargo/Função
+    ws['E15'] = get_col(row, 10)            # CPF
+    ws['F15'] = get_col(row, 13)            # Nome banco
+    ws['G15'] = get_col(row, 14)            # Agência
+    ws['H15'] = get_col(row, 15)            # DV agência
+    ws['I15'] = get_col(row, 16)            # Conta corrente
+    ws['J15'] = get_col(row, 17)            # DV conta
+    ws['K15'] = get_col(row, 18)            # Poupança
 
-    # Trechos: cada slot ocupa 8 colunas a partir de 19, na ordem: Tipo de Trecho
+    # Trechos: cada slot ocupa 8 colunas a partir de 21, na ordem: Tipo de Trecho
     # (Ida/Intermediário/Volta), Origem, Destino, Tipo Localidade de Destino,
     # Data, Período, Tipo Deslocamento, Observações sobre o deslocamento. Até
     # 10 slots reservados; para de ler no primeiro slot sem origem preenchida.
@@ -235,7 +235,7 @@ def generate_form(row, output_dir):
     # de reordenação de perguntas no Google Forms ao longo do tempo. Por isso
     # os dois primeiros campos são identificados pelo conteúdo (valor de
     # direção conhecido) em vez de por posição fixa.
-    TRECHO_START = 19
+    TRECHO_START = 21
     TRECHO_WIDTH = 8
     MAX_TRECHOS  = 10
     OFFSET_DESTINO, OFFSET_DATA, OFFSET_TURNO, OFFSET_TIPO_DESLOCAMENTO = 2, 4, 5, 6
@@ -297,8 +297,8 @@ def generate_form(row, output_dir):
         ws[f'Q{out_row}'] = seg['hora_volta']
 
     justificativa_row = 19 + max(extra_needed, 0)
-    ws[f'C{justificativa_row}'] = get_col(row, 99)      # Justificativa fora do prazo
-    ws[f'C{justificativa_row + 1}'] = get_col(row, 100) # Observações
+    ws[f'C{justificativa_row}'] = get_col(row, 101)      # Justificativa fora do prazo
+    ws[f'C{justificativa_row + 1}'] = get_col(row, 102)  # Observações
 
     output_path = unique_output_path(output_dir, cpf)
     wb.save(output_path)
@@ -323,7 +323,7 @@ def run_generation(input_file, base_output_dir, progress_callback=None, selected
 
     for i, row in enumerate(rows, 1):
         output_path = generate_form(row, output_dir)
-        cpf = get_col(row, 0).strip('"')
+        cpf = get_col(row, 0).strip('="')
         if progress_callback:
             progress_callback(f'  [{i}] CPF {cpf} → {os.path.basename(output_path)}')
 
